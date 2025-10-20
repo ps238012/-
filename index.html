@@ -1,146 +1,618 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>神経衰弱</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-  </style>
-</head>
-<body>
-  <div id="app"></div>
+import { useState, useEffect, useRef } from 'react';
 
-  <script>
-    const symbols = ['🌸', '🌺', '🌻', '🌼', '🌷', '🌹', '🍎', '🍊'];
-    let cards = [];
-    let flipped = [];
-    let matched = [];
-    let turns = 0;
-    let score = 0;
-    let gameOver = false;
-    let won = false;
+const SideScrollerGame = () => {
+  const canvasRef = useRef(null);
+  const [gameRunning, setGameRunning] = useState(true);
+  const [score, setScore] = useState(0);
+  const [coinCount, setCoinCount] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [gameOverMessage, setGameOverMessage] = useState(null);
+  
+  const gameStateRef = useRef({
+    gameSpeed: 3,
+    frameCount: 0,
+    TARGET_COINS: 10,
+    groundY: 320,
+    player: {
+      x: 100,
+      y: 280,
+      width: 40,
+      height: 40,
+      baseWidth: 40,
+      baseHeight: 40,
+      velocityY: 0,
+      jumping: false,
+      gravity: 0.6,
+      jumpPower: -12,
+      jumpCount: 0,
+      maxJumps: 2,
+      isPowerUp: false,
+      powerUpTime: 0
+    },
+    obstacles: [],
+    coins: [],
+    powerUpItems: [],
+    enemies: [],
+    clouds: [
+      {x: 100, y: 50, speed: 0.3},
+      {x: 400, y: 80, speed: 0.4},
+      {x: 650, y: 40, speed: 0.2}
+    ]
+  });
 
-    function initializeGame() {
-      cards = [...symbols, ...symbols]
-        .sort(() => Math.random() - 0.5)
-        .map((symbol, index) => ({ id: index, symbol }));
-      flipped = [];
-      matched = [];
-      turns = 0;
-      score = 0;
-      gameOver = false;
-      won = false;
-      render();
-    }
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const state = gameStateRef.current;
 
-    function handleCardClick(id) {
-      if (flipped.length === 2 || flipped.includes(id) || matched.includes(id) || gameOver) {
-        return;
+    const drawPlayer = () => {
+      const p = state.player;
+      if (p.isPowerUp) {
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+        ctx.fillRect(p.x - 10, p.y - 10, p.width + 20, p.height + 20);
       }
+      
+      ctx.fillStyle = p.isPowerUp ? '#FFD700' : '#FF6B6B';
+      ctx.fillRect(p.x, p.y, p.width, p.height);
+      
+      ctx.fillStyle = 'white';
+      const eyeSize = p.width / 4;
+      ctx.fillRect(p.x + p.width * 0.2, p.y + p.height * 0.25, eyeSize, eyeSize);
+      ctx.fillRect(p.x + p.width * 0.55, p.y + p.height * 0.25, eyeSize, eyeSize);
+      
+      ctx.fillStyle = 'black';
+      const pupilSize = eyeSize * 0.4;
+      ctx.fillRect(p.x + p.width * 0.3, p.y + p.height * 0.35, pupilSize, pupilSize);
+      ctx.fillRect(p.x + p.width * 0.65, p.y + p.height * 0.35, pupilSize, pupilSize);
+      
+      ctx.fillStyle = 'black';
+      ctx.fillRect(p.x + p.width * 0.375, p.y + p.height * 0.7, p.width * 0.25, p.height * 0.075);
+    };
 
-      flipped.push(id);
-      render();
+    const drawObstacle = (obs) => {
+      if (obs.type === 'cactus') {
+        ctx.fillStyle = '#2D5016';
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+        ctx.fillRect(obs.x - 8, obs.y + 10, 8, 10);
+        ctx.fillRect(obs.x + obs.width, obs.y + 10, 8, 10);
+      } else if (obs.type === 'rock') {
+        ctx.fillStyle = '#666666';
+        ctx.beginPath();
+        ctx.moveTo(obs.x + obs.width / 2, obs.y);
+        ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
+        ctx.lineTo(obs.x, obs.y + obs.height);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = '#888888';
+        ctx.beginPath();
+        ctx.arc(obs.x + obs.width / 2, obs.y + obs.height / 2, 8, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (obs.type === 'spike') {
+        ctx.fillStyle = '#8B0000';
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.moveTo(obs.x + i * 15, obs.y + obs.height);
+          ctx.lineTo(obs.x + i * 15 + 7.5, obs.y);
+          ctx.lineTo(obs.x + i * 15 + 15, obs.y + obs.height);
+          ctx.closePath();
+          ctx.fill();
+        }
+      } else if (obs.type === 'bird') {
+        ctx.fillStyle = '#FF6347';
+        ctx.beginPath();
+        ctx.ellipse(obs.x + 20, obs.y + 15, 15, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        const wingOffset = Math.sin(state.frameCount * 0.2) * 5;
+        ctx.fillStyle = '#FF4500';
+        ctx.beginPath();
+        ctx.ellipse(obs.x + 5, obs.y + 15 + wingOffset, 10, 5, -0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(obs.x + 35, obs.y + 15 - wingOffset, 10, 5, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(obs.x + 25, obs.y + 12, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(obs.x + 26, obs.y + 12, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
 
-      if (flipped.length === 2) {
-        const [first, second] = flipped;
-        const firstCard = cards.find(card => card.id === first);
-        const secondCard = cards.find(card => card.id === second);
+    const drawCoin = (coin) => {
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.arc(coin.x + 15, coin.y + 15, 12, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.fillStyle = '#FFA500';
+      ctx.beginPath();
+      ctx.arc(coin.x + 15, coin.y + 15, 8, 0, Math.PI * 2);
+      ctx.fill();
+    };
 
-        const newTurns = turns + 1;
+    const drawPowerUpItem = (item) => {
+      ctx.fillStyle = 'rgba(138, 43, 226, 0.3)';
+      ctx.beginPath();
+      ctx.arc(item.x + 15, item.y + 15, 18 + Math.sin(state.frameCount * 0.1) * 3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.fillStyle = '#8A2BE2';
+      ctx.beginPath();
+      ctx.arc(item.x + 15, item.y + 15, 15, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 20px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⭐', item.x + 15, item.y + 15);
+    };
 
-        if (firstCard.symbol === secondCard.symbol) {
-          setTimeout(() => {
-            matched.push(first, second);
-            flipped = [];
-            score++;
-            turns = newTurns;
-            if (matched.length === 16) {
-              won = true;
-              gameOver = true;
-            } else if (turns >= 10) {
-              gameOver = true;
-            }
-            render();
-          }, 600);
-        } else {
-          setTimeout(() => {
-            flipped = [];
-            turns = newTurns;
-            if (turns >= 10) {
-              gameOver = true;
-            }
-            render();
-          }, 1000);
+    const drawEnemy = (enemy) => {
+      if (enemy.type === 'walker') {
+        ctx.fillStyle = '#32CD32';
+        ctx.beginPath();
+        ctx.ellipse(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, enemy.width / 2, enemy.height / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(enemy.x + 15, enemy.y + 15, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(enemy.x + 30, enemy.y + 15, 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(enemy.x + 15, enemy.y + 15, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(enemy.x + 30, enemy.y + 15, 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (enemy.type === 'flyer') {
+        const wingOffset = Math.sin(state.frameCount * 0.2 + enemy.id) * 5;
+        
+        ctx.fillStyle = '#8B008B';
+        ctx.beginPath();
+        ctx.ellipse(enemy.x + 20, enemy.y + 15, 15, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#9400D3';
+        ctx.beginPath();
+        ctx.ellipse(enemy.x + 5, enemy.y + 15 + wingOffset, 10, 8, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(enemy.x + 35, enemy.y + 15 - wingOffset, 10, 8, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#8B008B';
+        ctx.beginPath();
+        ctx.moveTo(enemy.x + 15, enemy.y + 5);
+        ctx.lineTo(enemy.x + 12, enemy.y);
+        ctx.lineTo(enemy.x + 18, enemy.y + 8);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(enemy.x + 25, enemy.y + 5);
+        ctx.lineTo(enemy.x + 28, enemy.y);
+        ctx.lineTo(enemy.x + 22, enemy.y + 8);
+        ctx.fill();
+        
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(enemy.x + 15, enemy.y + 15, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(enemy.x + 25, enemy.y + 15, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
+    const drawCloud = (cloud) => {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.beginPath();
+      ctx.arc(cloud.x, cloud.y, 20, 0, Math.PI * 2);
+      ctx.arc(cloud.x + 25, cloud.y, 25, 0, Math.PI * 2);
+      ctx.arc(cloud.x + 50, cloud.y, 20, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    const drawGround = () => {
+      ctx.fillStyle = '#8B4513';
+      ctx.fillRect(0, state.groundY, canvas.width, canvas.height - state.groundY);
+      
+      ctx.fillStyle = '#90EE90';
+      for (let i = 0; i < canvas.width; i += 40) {
+        ctx.fillRect(i, state.groundY - 5, 30, 5);
+      }
+    };
+
+    const jump = () => {
+      const p = state.player;
+      if (p.jumpCount < p.maxJumps && gameRunning) {
+        p.velocityY = p.jumpPower;
+        p.jumping = true;
+        p.jumpCount++;
+      }
+    };
+
+    const updatePlayer = () => {
+      const p = state.player;
+      if (p.isPowerUp) {
+        p.powerUpTime--;
+        if (p.powerUpTime <= 0) {
+          p.isPowerUp = false;
+          p.width = p.baseWidth;
+          p.height = p.baseHeight;
         }
       }
-    }
-
-    function render() {
-      const app = document.getElementById('app');
       
-      app.innerHTML = `
-        <div class="min-h-screen bg-gradient-to-br from-purple-400 via-pink-300 to-blue-300 flex flex-col items-center justify-center p-8">
-          <h1 class="text-4xl font-bold text-white mb-6 drop-shadow-lg">神経衰弱</h1>
-          <div class="bg-white bg-opacity-90 rounded-lg p-6 mb-6 shadow-xl">
-            <div class="flex gap-8 text-lg font-semibold">
-              <div>残り回数: <span class="text-blue-600">${10 - turns}</span></div>
-              <div>得点: <span class="text-green-600">${score}</span> / 8</div>
-            </div>
+      p.velocityY += p.gravity;
+      p.y += p.velocityY;
+
+      if (p.y >= state.groundY - p.height) {
+        p.y = state.groundY - p.height;
+        p.velocityY = 0;
+        p.jumping = false;
+        p.jumpCount = 0;
+      }
+    };
+
+    const spawnObstacle = () => {
+      if (state.frameCount % 120 === 0) {
+        const obstacleTypes = [
+          { type: 'cactus', width: 40, height: 50, y: state.groundY - 50 },
+          { type: 'rock', width: 45, height: 40, y: state.groundY - 40 },
+          { type: 'spike', width: 45, height: 35, y: state.groundY - 35 },
+          { type: 'bird', width: 40, height: 30, y: state.groundY - 120 }
+        ];
+        
+        const randomObstacle = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+        
+        state.obstacles.push({
+          x: canvas.width,
+          y: randomObstacle.y,
+          width: randomObstacle.width,
+          height: randomObstacle.height,
+          type: randomObstacle.type
+        });
+      }
+    };
+
+    const spawnCoin = () => {
+      if (state.frameCount % 150 === 0) {
+        state.coins.push({
+          x: canvas.width,
+          y: state.groundY - 100 - Math.random() * 80,
+          width: 30,
+          height: 30,
+          collected: false
+        });
+      }
+    };
+
+    const spawnPowerUpItem = () => {
+      if (state.frameCount % 400 === 0) {
+        state.powerUpItems.push({
+          x: canvas.width,
+          y: state.groundY - 120 - Math.random() * 60,
+          width: 30,
+          height: 30,
+          collected: false
+        });
+      }
+    };
+
+    const spawnEnemy = () => {
+      if (state.frameCount % 180 === 0) {
+        const enemyTypes = [
+          { 
+            type: 'walker', 
+            width: 45, 
+            height: 35, 
+            y: state.groundY - 35,
+            speed: state.gameSpeed * 0.8
+          },
+          { 
+            type: 'flyer', 
+            width: 40, 
+            height: 30, 
+            y: state.groundY - 140,
+            speed: state.gameSpeed * 1.1,
+            movePattern: 'wave'
+          }
+        ];
+        
+        const randomEnemy = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+        
+        state.enemies.push({
+          x: canvas.width,
+          y: randomEnemy.y,
+          baseY: randomEnemy.y,
+          width: randomEnemy.width,
+          height: randomEnemy.height,
+          type: randomEnemy.type,
+          speed: randomEnemy.speed,
+          movePattern: randomEnemy.movePattern || 'straight',
+          id: Math.random()
+        });
+      }
+    };
+
+    const updateObstacles = () => {
+      for (let i = state.obstacles.length - 1; i >= 0; i--) {
+        const obs = state.obstacles[i];
+        obs.x -= state.gameSpeed;
+        if (obs.x + obs.width < 0) {
+          state.obstacles.splice(i, 1);
+          setScore(s => s + 10);
+        }
+      }
+    };
+
+    const updateCoins = () => {
+      for (let i = state.coins.length - 1; i >= 0; i--) {
+        const coin = state.coins[i];
+        coin.x -= state.gameSpeed;
+        
+        const p = state.player;
+        if (!coin.collected &&
+            p.x < coin.x + coin.width &&
+            p.x + p.width > coin.x &&
+            p.y < coin.y + coin.height &&
+            p.y + p.height > coin.y) {
+          coin.collected = true;
+          setScore(s => s + 50);
+          setCoinCount(c => {
+            const newCount = c + 1;
+            if (newCount >= state.TARGET_COINS) {
+              setTimeout(() => endGame(true), 500);
+            }
+            return newCount;
+          });
+        }
+        
+        if (coin.x + coin.width < 0 || coin.collected) {
+          state.coins.splice(i, 1);
+        }
+      }
+    };
+
+    const updatePowerUpItems = () => {
+      for (let i = state.powerUpItems.length - 1; i >= 0; i--) {
+        const item = state.powerUpItems[i];
+        item.x -= state.gameSpeed;
+        
+        const p = state.player;
+        if (!item.collected &&
+            p.x < item.x + item.width &&
+            p.x + p.width > item.x &&
+            p.y < item.y + item.height &&
+            p.y + p.height > item.y) {
+          item.collected = true;
+          p.isPowerUp = true;
+          p.powerUpTime = 300;
+          p.width = p.baseWidth * 1.5;
+          p.height = p.baseHeight * 1.5;
+        }
+        
+        if (item.x + item.width < 0 || item.collected) {
+          state.powerUpItems.splice(i, 1);
+        }
+      }
+    };
+
+    const updateEnemies = () => {
+      for (let i = state.enemies.length - 1; i >= 0; i--) {
+        const enemy = state.enemies[i];
+        enemy.x -= enemy.speed;
+        
+        if (enemy.movePattern === 'wave') {
+          enemy.y = enemy.baseY + Math.sin(state.frameCount * 0.05 + enemy.id * 10) * 20;
+        }
+        
+        if (enemy.x + enemy.width < 0) {
+          state.enemies.splice(i, 1);
+          setScore(s => s + 10);
+        }
+      }
+    };
+
+    const updateClouds = () => {
+      state.clouds.forEach(cloud => {
+        cloud.x -= cloud.speed;
+        if (cloud.x < -60) {
+          cloud.x = canvas.width + 60;
+        }
+      });
+    };
+
+    const checkCollision = () => {
+      if (state.player.isPowerUp) return;
+      
+      const p = state.player;
+      for (let obs of state.obstacles) {
+        if (p.x < obs.x + obs.width &&
+            p.x + p.width > obs.x &&
+            p.y < obs.y + obs.height &&
+            p.y + p.height > obs.y) {
+          endGame(false);
+          return;
+        }
+      }
+      
+      for (let enemy of state.enemies) {
+        if (p.x < enemy.x + enemy.width &&
+            p.x + p.width > enemy.x &&
+            p.y < enemy.y + enemy.height &&
+            p.y + p.height > enemy.y) {
+          endGame(false);
+          return;
+        }
+      }
+    };
+
+    const endGame = (isWin) => {
+      setGameRunning(false);
+      setGameOverMessage(isWin ? 'win' : 'lose');
+    };
+
+    let animationId;
+    const gameLoop = () => {
+      if (!gameRunning) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#87CEEB';
+      ctx.fillRect(0, 0, canvas.width, state.groundY);
+
+      state.clouds.forEach(cloud => drawCloud(cloud));
+      updateClouds();
+
+      drawGround();
+
+      spawnObstacle();
+      updateObstacles();
+      state.obstacles.forEach(obs => drawObstacle(obs));
+
+      spawnEnemy();
+      updateEnemies();
+      state.enemies.forEach(enemy => drawEnemy(enemy));
+
+      spawnCoin();
+      updateCoins();
+      state.coins.forEach(coin => {
+        if (!coin.collected) drawCoin(coin);
+      });
+
+      spawnPowerUpItem();
+      updatePowerUpItems();
+      state.powerUpItems.forEach(item => {
+        if (!item.collected) drawPowerUpItem(item);
+      });
+
+      drawPlayer();
+      updatePlayer();
+
+      checkCollision();
+
+      state.frameCount++;
+      
+      if (state.frameCount % 60 === 0 && timeLeft > 0) {
+        setTimeLeft(t => {
+          const newTime = t - 1;
+          if (newTime === 0 && coinCount < state.TARGET_COINS) {
+            endGame(false);
+          }
+          return newTime;
+        });
+      }
+      
+      if (state.frameCount % 300 === 0) {
+        state.gameSpeed += 0.3;
+      }
+
+      animationId = requestAnimationFrame(gameLoop);
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        jump();
+      }
+    };
+
+    const handleCanvasClick = () => jump();
+
+    document.addEventListener('keydown', handleKeyDown);
+    canvas.addEventListener('click', handleCanvasClick);
+
+    gameLoop();
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      document.removeEventListener('keydown', handleKeyDown);
+      canvas.removeEventListener('click', handleCanvasClick);
+    };
+  }, [gameRunning, coinCount, timeLeft]);
+
+  const handleRestart = () => {
+    const state = gameStateRef.current;
+    setGameRunning(true);
+    setScore(0);
+    setCoinCount(0);
+    setTimeLeft(60);
+    setGameOverMessage(null);
+    state.gameSpeed = 3;
+    state.player.y = 280;
+    state.player.velocityY = 0;
+    state.player.jumping = false;
+    state.player.isPowerUp = false;
+    state.player.powerUpTime = 0;
+    state.player.width = state.player.baseWidth;
+    state.player.height = state.player.baseHeight;
+    state.obstacles = [];
+    state.coins = [];
+    state.powerUpItems = [];
+    state.enemies = [];
+    state.frameCount = 0;
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-sky-400 via-sky-400 to-green-300">
+      <canvas
+        ref={canvasRef}
+        width={800}
+        height={400}
+        className="border-4 border-gray-800 shadow-2xl"
+        style={{
+          background: 'linear-gradient(to bottom, #87CEEB 0%, #87CEEB 70%, #8B4513 70%, #8B4513 100%)'
+        }}
+      />
+      <div className="mt-5 text-2xl font-bold text-gray-800">
+        スコア: <span className="text-orange-600">{score}</span> | コイン: <span className="text-green-600">{coinCount}</span> / 10 | 残り時間: <span className="text-blue-600">{timeLeft}</span>秒
+      </div>
+      <div className="mt-4 text-gray-700 text-lg">
+        スペースキー または 画面タップ でジャンプ！（2段ジャンプ可能）
+      </div>
+      
+      {gameOverMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-12 text-center shadow-2xl">
+            {gameOverMessage === 'win' ? (
+              <>
+                <div className="text-8xl mb-4">🎉</div>
+                <h2 className="text-4xl font-bold text-yellow-500 mb-4">クリア！おめでとう！</h2>
+                <p className="text-xl text-gray-700 mb-2">最終スコア: {score}</p>
+                <p className="text-xl text-gray-700 mb-6">コイン: {coinCount} / 10</p>
+              </>
+            ) : (
+              <>
+                <div className="text-8xl mb-4">😢</div>
+                <h2 className="text-4xl font-bold text-red-500 mb-4">ゲームオーバー！</h2>
+                <p className="text-xl text-gray-700 mb-2">スコア: {score}</p>
+                <p className="text-xl text-gray-700 mb-6">コイン: {coinCount} / 10</p>
+              </>
+            )}
+            <button
+              onClick={handleRestart}
+              className="bg-gradient-to-r from-green-500 to-green-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-lg"
+            >
+              もう一度プレイ
+            </button>
           </div>
-
-          ${gameOver ? `
-            <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div class="bg-white rounded-2xl p-12 text-center shadow-2xl">
-                ${won ? `
-                  <div class="text-8xl mb-4">🏆</div>
-                  <h2 class="text-4xl font-bold text-yellow-500 mb-4">おめでとう！</h2>
-                  <p class="text-xl text-gray-700 mb-6">全てのペアを見つけました！</p>
-                ` : `
-                  <div class="text-8xl mb-4">😢</div>
-                  <h2 class="text-4xl font-bold text-red-500 mb-4">あなたの負け</h2>
-                  <p class="text-xl text-gray-700 mb-6">10回以内にクリアできませんでした</p>
-                `}
-                <button
-                  onclick="initializeGame()"
-                  class="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-8 py-3 rounded-full text-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all"
-                >
-                  もう一度プレイ
-                </button>
-              </div>
-            </div>
-          ` : ''}
-
-          <div class="grid grid-cols-4 gap-4">
-            ${cards.map(card => `
-              <div
-                onclick="handleCardClick(${card.id})"
-                class="w-24 h-24 flex items-center justify-center text-5xl rounded-xl cursor-pointer transition-all duration-300 transform hover:scale-105 ${
-                  flipped.includes(card.id) || matched.includes(card.id)
-                    ? 'bg-white shadow-lg'
-                    : 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-md'
-                } ${matched.includes(card.id) ? 'opacity-50' : ''}"
-              >
-                ${flipped.includes(card.id) || matched.includes(card.id) ? card.symbol : ''}
-              </div>
-            `).join('')}
-          </div>
-
-          <button
-            onclick="initializeGame()"
-            class="mt-8 bg-white text-purple-600 px-6 py-3 rounded-full font-semibold hover:bg-purple-50 transition-all shadow-lg"
-          >
-            ゲームをリセット
-          </button>
         </div>
-      `;
-    }
+      )}
+    </div>
+  );
+};
 
-    // ゲーム初期化
-    initializeGame();
-  </script>
-</body>
-</html>
+export default SideScrollerGame;
