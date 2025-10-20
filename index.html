@@ -1,6 +1,8 @@
+// キャンバスとコンテキストの取得
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// ゲーム状態
 let gameRunning = true;
 let score = 0;
 let gameSpeed = 3;
@@ -9,7 +11,7 @@ let coinCount = 0;
 const TARGET_COINS = 10;
 let timeLeft = 60;
 
-// プレイヤー
+// プレイヤーオブジェクト
 const player = {
     x: 100,
     y: 280,
@@ -27,7 +29,7 @@ const player = {
     powerUpTime: 0
 };
 
-// 障害物
+// ゲーム要素の配列
 let obstacles = [];
 let coins = [];
 let powerUpItems = [];
@@ -36,13 +38,14 @@ let enemies = [];
 // 地面の位置
 const groundY = 320;
 
-// 雲
+// 雲の配列
 let clouds = [
     {x: 100, y: 50, speed: 0.3},
     {x: 400, y: 80, speed: 0.4},
     {x: 650, y: 40, speed: 0.2}
 ];
 
+// プレイヤーを描画
 function drawPlayer() {
     // パワーアップ時のオーラ
     if (player.isPowerUp) {
@@ -50,7 +53,7 @@ function drawPlayer() {
         ctx.fillRect(player.x - 10, player.y - 10, player.width + 20, player.height + 20);
     }
     
-    // プレイヤー（キャラクター風）
+    // プレイヤー本体
     ctx.fillStyle = player.isPowerUp ? '#FFD700' : '#FF6B6B';
     ctx.fillRect(player.x, player.y, player.width, player.height);
     
@@ -70,6 +73,7 @@ function drawPlayer() {
     ctx.fillRect(player.x + player.width * 0.375, player.y + player.height * 0.7, player.width * 0.25, player.height * 0.075);
 }
 
+// 障害物を描画
 function drawObstacle(obs) {
     if (obs.type === 'cactus') {
         // サボテン
@@ -131,6 +135,7 @@ function drawObstacle(obs) {
     }
 }
 
+// コインを描画
 function drawCoin(coin) {
     ctx.fillStyle = '#FFD700';
     ctx.beginPath();
@@ -143,6 +148,7 @@ function drawCoin(coin) {
     ctx.fill();
 }
 
+// パワーアップアイテムを描画
 function drawPowerUpItem(item) {
     // アイテムの輝き
     ctx.fillStyle = 'rgba(138, 43, 226, 0.3)';
@@ -164,72 +170,7 @@ function drawPowerUpItem(item) {
     ctx.fillText('⭐', item.x + 15, item.y + 15);
 }
 
-function drawEnemy(enemy) {
-    if (enemy.type === 'walker') {
-        // 歩く敵（スライム風）
-        ctx.fillStyle = '#32CD32';
-        ctx.beginPath();
-        ctx.ellipse(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, enemy.width / 2, enemy.height / 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // 目
-        ctx.fillStyle = 'white';
-        ctx.beginPath();
-        ctx.arc(enemy.x + 15, enemy.y + 15, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(enemy.x + 30, enemy.y + 15, 5, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = 'black';
-        ctx.beginPath();
-        ctx.arc(enemy.x + 15, enemy.y + 15, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(enemy.x + 30, enemy.y + 15, 2, 0, Math.PI * 2);
-        ctx.fill();
-    } else if (enemy.type === 'flyer') {
-        // 飛ぶ敵（コウモリ風）
-        const wingOffset = Math.sin(frameCount * 0.2 + enemy.id) * 5;
-        
-        ctx.fillStyle = '#8B008B';
-        ctx.beginPath();
-        ctx.ellipse(enemy.x + 20, enemy.y + 15, 15, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // 翼
-        ctx.fillStyle = '#9400D3';
-        ctx.beginPath();
-        ctx.ellipse(enemy.x + 5, enemy.y + 15 + wingOffset, 10, 8, -0.3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(enemy.x + 35, enemy.y + 15 - wingOffset, 10, 8, 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // 耳
-        ctx.fillStyle = '#8B008B';
-        ctx.beginPath();
-        ctx.moveTo(enemy.x + 15, enemy.y + 5);
-        ctx.lineTo(enemy.x + 12, enemy.y);
-        ctx.lineTo(enemy.x + 18, enemy.y + 8);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(enemy.x + 25, enemy.y + 5);
-        ctx.lineTo(enemy.x + 28, enemy.y);
-        ctx.lineTo(enemy.x + 22, enemy.y + 8);
-        ctx.fill();
-        
-        // 目
-        ctx.fillStyle = 'red';
-        ctx.beginPath();
-        ctx.arc(enemy.x + 15, enemy.y + 15, 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(enemy.x + 25, enemy.y + 15, 2, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
-
+// 雲を描画
 function drawCloud(cloud) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.beginPath();
@@ -239,6 +180,7 @@ function drawCloud(cloud) {
     ctx.fill();
 }
 
+// 地面を描画
 function drawGround() {
     // 地面
     ctx.fillStyle = '#8B4513';
@@ -251,6 +193,7 @@ function drawGround() {
     }
 }
 
+// ジャンプ処理
 function jump() {
     if (player.jumpCount < player.maxJumps && gameRunning) {
         player.velocityY = player.jumpPower;
@@ -259,6 +202,7 @@ function jump() {
     }
 }
 
+// プレイヤーの更新
 function updatePlayer() {
     // パワーアップタイマー
     if (player.isPowerUp) {
@@ -281,6 +225,7 @@ function updatePlayer() {
     }
 }
 
+// 障害物の生成
 function spawnObstacle() {
     if (frameCount % 120 === 0) {
         const obstacleTypes = [
@@ -302,6 +247,7 @@ function spawnObstacle() {
     }
 }
 
+// コインの生成
 function spawnCoin() {
     if (frameCount % 150 === 0) {
         coins.push({
@@ -314,6 +260,7 @@ function spawnCoin() {
     }
 }
 
+// パワーアップアイテムの生成
 function spawnPowerUpItem() {
     if (frameCount % 400 === 0) {
         powerUpItems.push({
@@ -326,42 +273,7 @@ function spawnPowerUpItem() {
     }
 }
 
-function spawnEnemy() {
-    if (frameCount % 180 === 0) {
-        const enemyTypes = [
-            { 
-                type: 'walker', 
-                width: 45, 
-                height: 35, 
-                y: groundY - 35,
-                speed: gameSpeed * 0.8
-            },
-            { 
-                type: 'flyer', 
-                width: 40, 
-                height: 30, 
-                y: groundY - 140,
-                speed: gameSpeed * 1.1,
-                movePattern: 'wave'
-            }
-        ];
-        
-        const randomEnemy = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-        
-        enemies.push({
-            x: canvas.width,
-            y: randomEnemy.y,
-            baseY: randomEnemy.y,
-            width: randomEnemy.width,
-            height: randomEnemy.height,
-            type: randomEnemy.type,
-            speed: randomEnemy.speed,
-            movePattern: randomEnemy.movePattern || 'straight',
-            id: Math.random()
-        });
-    }
-}
-
+// 障害物の更新
 function updateObstacles() {
     obstacles.forEach((obs, index) => {
         obs.x -= gameSpeed;
@@ -373,6 +285,7 @@ function updateObstacles() {
     });
 }
 
+// コインの更新
 function updateCoins() {
     coins.forEach((coin, index) => {
         coin.x -= gameSpeed;
@@ -400,6 +313,7 @@ function updateCoins() {
     });
 }
 
+// パワーアップアイテムの更新
 function updatePowerUpItems() {
     powerUpItems.forEach((item, index) => {
         item.x -= gameSpeed;
@@ -423,23 +337,7 @@ function updatePowerUpItems() {
     });
 }
 
-function updateEnemies() {
-    enemies.forEach((enemy, index) => {
-        enemy.x -= enemy.speed;
-        
-        // 飛ぶ敵の波動移動
-        if (enemy.movePattern === 'wave') {
-            enemy.y = enemy.baseY + Math.sin(frameCount * 0.05 + enemy.id * 10) * 20;
-        }
-        
-        if (enemy.x + enemy.width < 0) {
-            enemies.splice(index, 1);
-            score += 10;
-            document.getElementById('score').textContent = score;
-        }
-    });
-}
-
+// 雲の更新
 function updateClouds() {
     clouds.forEach(cloud => {
         cloud.x -= cloud.speed;
@@ -449,11 +347,11 @@ function updateClouds() {
     });
 }
 
+// 衝突判定
 function checkCollision() {
     // パワーアップ中は無敵
     if (player.isPowerUp) return;
     
-    // 障害物との衝突
     for (let obs of obstacles) {
         if (player.x < obs.x + obs.width &&
             player.x + player.width > obs.x &&
@@ -463,19 +361,9 @@ function checkCollision() {
             return;
         }
     }
-    
-    // 敵との衝突
-    for (let enemy of enemies) {
-        if (player.x < enemy.x + enemy.width &&
-            player.x + player.width > enemy.x &&
-            player.y < enemy.y + enemy.height &&
-            player.y + player.height > enemy.y) {
-            gameOver(false);
-            return;
-        }
-    }
 }
 
+// ゲームオーバー処理
 function gameOver(isWin) {
     gameRunning = false;
     const gameOverDiv = document.getElementById('gameOverText');
@@ -487,12 +375,12 @@ function gameOver(isWin) {
     gameOverDiv.style.display = 'block';
 }
 
+// ゲームリスタート
 function restartGame() {
     gameRunning = true;
     score = 0;
     coinCount = 0;
     timeLeft = 60;
-    gameSpeed = 3;
     player.y = 280;
     player.velocityY = 0;
     player.jumping = false;
@@ -503,7 +391,6 @@ function restartGame() {
     obstacles = [];
     coins = [];
     powerUpItems = [];
-    enemies = [];
     frameCount = 0;
     document.getElementById('score').textContent = score;
     document.getElementById('coinCount').textContent = coinCount;
@@ -512,6 +399,7 @@ function restartGame() {
     gameLoop();
 }
 
+// メインゲームループ
 function gameLoop() {
     if (!gameRunning) return;
 
@@ -528,15 +416,10 @@ function gameLoop() {
     // 地面
     drawGround();
 
-    // 障害物を先に描画
+    // 障害物
     spawnObstacle();
     updateObstacles();
     obstacles.forEach(obs => drawObstacle(obs));
-
-    // 敵
-    spawnEnemy();
-    updateEnemies();
-    enemies.forEach(enemy => drawEnemy(enemy));
 
     // コイン
     spawnCoin();
@@ -552,7 +435,7 @@ function gameLoop() {
         if (!item.collected) drawPowerUpItem(item);
     });
 
-    // プレイヤーを最後に描画（一番手前）
+    // プレイヤー
     drawPlayer();
     updatePlayer();
 
@@ -579,7 +462,7 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// キーボード入力
+// イベントリスナー
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
         e.preventDefault();
@@ -587,7 +470,6 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// タッチ/クリック入力
 canvas.addEventListener('click', jump);
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
